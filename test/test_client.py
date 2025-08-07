@@ -5,7 +5,7 @@ import asyncio
 import aiohttp
 
 # Configuration
-API_BASE_URL = "https://your-api-url.com/api/v1"  # Replace with your deployed URL
+API_BASE_URL = "http://localhost:8000/api/v1"  # Replace with your deployed URL or local server URL
 # For local testing: "http://localhost:8000/api/v1"
 AUTH_TOKEN = "4ddf287faf3c89dfb4c0adc648a46975d4063a37899d2243a451f717af4a32cc"
 
