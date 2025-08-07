@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: document-analysis-api
+    name: Ask-LLM
     env: python
     plan: free
     buildCommand: |
