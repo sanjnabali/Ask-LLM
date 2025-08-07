@@ -9,7 +9,8 @@ uvicorn[standard]==0.24.0
 python-multipart==0.0.9
 
 # Document Processing - Python 3.12 compatible versions
-pymupdf==1.23.6 --only-binary :all:
+pymupdf==1.26.3 --only-binary :all:
+
 
 python-docx==1.1.0
 beautifulsoup4==4.12.3
