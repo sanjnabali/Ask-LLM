@@ -334,13 +334,14 @@ class VectorStore:
     def _initialize(self):
         """Initialize Pinecone and embedding model"""
         # Initialize embedding model first
-        if SENTENCE_TRANSFORMERS_AVAILABLE:
-            try:
-                self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-                logger.info("Embedding model loaded successfully")
-            except Exception as e:
-                logger.error(f"Failed to load embedding model: {e}")
-                SENTENCE_TRANSFORMERS_AVAILABLE = False
+        try:
+            self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+            logger.info("Embedding model loaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to load embedding model: {e}")
+            global SENTENCE_TRANSFORMERS_AVAILABLE
+            SENTENCE_TRANSFORMERS_AVAILABLE = False  # Correctly modifies global variable
+
         
         if not SENTENCE_TRANSFORMERS_AVAILABLE:
             logger.warning("Sentence Transformers not available - using dummy embeddings")
