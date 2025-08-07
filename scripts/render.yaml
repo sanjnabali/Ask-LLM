@@ -41,7 +41,8 @@ services:
       python -c "import sentence_transformers; print('SentenceTransformers: OK')" || echo "SentenceTransformers: Will use fallback"
     
     startCommand: |
-      python main.py
+       uvicorn main:app --host 0.0.0.0 --port 10000
+
     
     # Environment variables
     envVars:
