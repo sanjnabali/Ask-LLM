@@ -69,8 +69,10 @@ services:
       
       echo "=== Build Phase Completed Successfully ==="
 
-    # CRITICAL FIX: Use $PORT directly (Render sets this automatically)
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --log-level info
+    # CRITICAL FIX: Use $PORT directly (Render sets this automatically)info
+    
+    startCommand: uvicorn main:app --host=0.0.0.0 --port=$PORT --log-level info --app-dir .
+
 
     envVars:
       # REMOVED: Don't override PORT - let Render set it automatically
