@@ -1,20 +1,21 @@
-# main.py - Fixed and optimized version
+# main.py - Python 3.12.4 compatible version
 import os
 import json
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from datetime import datetime
 import asyncio
 import hashlib
 import re
 import time
 import traceback
+import sys
 
 # FastAPI and dependencies
 from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 import uvicorn
 
 # Document processing
@@ -25,15 +26,15 @@ except ImportError:
     print("Warning: PyMuPDF not available, PDF processing disabled")
 
 try:
-    from docx import Document
+    from docx import Document as DocxDocument
 except ImportError:
-    Document = None
+    DocxDocument = None
     print("Warning: python-docx not available, DOCX processing disabled")
 
 from bs4 import BeautifulSoup
 import requests
 
-# Vector DB and embeddings
+# Vector DB and embeddings - Updated imports for Python 3.12
 try:
     from pinecone import Pinecone, ServerlessSpec
     PINECONE_AVAILABLE = True
@@ -42,9 +43,14 @@ except ImportError:
     print("Warning: Pinecone not available, using fallback vector search")
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+    print("Warning: Sentence Transformers not available")
 
-# LLM
+# LLM - Updated for Python 3.12
 try:
     import google.generativeai as genai
     from google.generativeai.types import HarmCategory, HarmBlockThreshold
@@ -62,7 +68,10 @@ import certifi
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
 )
 logger = logging.getLogger(__name__)
 
@@ -87,7 +96,7 @@ if GEMINI_AVAILABLE and GEMINI_API_KEY:
 app = FastAPI(
     title="Document Analysis System",
     description="LLM-powered system for processing natural language queries on unstructured documents",
-    version="2.0.0"
+    version="2.1.0"
 )
 
 # CORS middleware
@@ -99,12 +108,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Pydantic models
+# Updated Pydantic models for v2 compatibility
 class QueryRequest(BaseModel):
-    documents: str = Field(..., description="Document URL or text content")
-    questions: List[str] = Field(..., description="List of questions to answer")
+    model_config = ConfigDict(str_strip_whitespace=True)
+    
+    documents: str = Field(..., description="Document URL or text content", min_length=1)
+    questions: List[str] = Field(..., description="List of questions to answer", min_length=1)
 
 class StructuredQuery(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    
     age: Optional[int] = None
     gender: Optional[str] = None
     procedure: Optional[str] = None
@@ -122,6 +135,7 @@ class ClauseMatch(BaseModel):
 class DocumentProcessor:
     def __init__(self):
         self.supported_formats = ['.pdf', '.docx', '.html', '.txt']
+        self.session_timeout = 30
     
     async def process_document(self, source: str) -> str:
         """Process document from URL or direct text"""
@@ -144,15 +158,20 @@ class DocumentProcessor:
     async def _process_from_url(self, url: str) -> str:
         """Download and process document from URL"""
         try:
-            # Create SSL context
+            # Create SSL context with better configuration for Python 3.12
             ssl_context = ssl.create_default_context(cafile=certifi.where())
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE  # For development - enable in production
             
-            timeout = aiohttp.ClientTimeout(total=30)
-            async with aiohttp.ClientSession(
-                connector=aiohttp.TCPConnector(ssl=ssl_context),
-                timeout=timeout
-            ) as session:
-                async with session.get(url) as response:
+            timeout = aiohttp.ClientTimeout(total=self.session_timeout)
+            connector = aiohttp.TCPConnector(ssl=ssl_context, limit=100, limit_per_host=30)
+            
+            async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (compatible; DocumentAnalysisBot/1.0)'
+                }
+                
+                async with session.get(url, headers=headers) as response:
                     if response.status != 200:
                         raise HTTPException(
                             status_code=400, 
@@ -187,7 +206,7 @@ class DocumentProcessor:
             doc = fitz.open(stream=pdf_content, filetype="pdf")
             text = ""
             for page in doc:
-                text += page.get_text()
+                text += page.get_text() + "\n"
             doc.close()
             return text
         except Exception as e:
@@ -196,12 +215,12 @@ class DocumentProcessor:
     
     def _extract_docx_text(self, docx_content: bytes) -> str:
         """Extract text from DOCX bytes"""
-        if not Document:
+        if not DocxDocument:
             raise HTTPException(status_code=400, detail="DOCX processing not available")
         
         try:
             import io
-            doc = Document(io.BytesIO(docx_content))
+            doc = DocxDocument(io.BytesIO(docx_content))
             text = ""
             for paragraph in doc.paragraphs:
                 text += paragraph.text + "\n"
@@ -217,7 +236,7 @@ class DocumentProcessor:
             # Remove script and style elements
             for script in soup(["script", "style"]):
                 script.decompose()
-            return soup.get_text()
+            return soup.get_text(separator=' ', strip=True)
         except Exception as e:
             logger.error(f"Error extracting HTML text: {e}")
             return html_content
@@ -237,7 +256,10 @@ class TextChunker:
             
             for sentence in sentences:
                 # Check if adding this sentence would exceed chunk size
-                if len(current_chunk + sentence) > self.chunk_size and current_chunk:
+                potential_chunk = current_chunk + " " + sentence if current_chunk else sentence
+                
+                if len(potential_chunk) > self.chunk_size and current_chunk:
+                    # Save current chunk
                     chunks.append({
                         "id": f"{source}_chunk_{chunk_id}",
                         "text": current_chunk.strip(),
@@ -245,14 +267,15 @@ class TextChunker:
                         "word_count": len(current_chunk.split())
                     })
                     
-                    # Add overlap
-                    overlap_sentences = current_chunk.split('. ')[-2:]
-                    current_chunk = '. '.join(overlap_sentences) + ". " if len(overlap_sentences) > 1 else ""
+                    # Create overlap for next chunk
+                    words = current_chunk.split()
+                    overlap_words = words[-self.overlap:] if len(words) > self.overlap else words
+                    current_chunk = " ".join(overlap_words)
                     chunk_id += 1
                 
-                current_chunk += sentence + " "
+                current_chunk = potential_chunk
             
-            # Add final chunk
+            # Add final chunk if it exists
             if current_chunk.strip():
                 chunks.append({
                     "id": f"{source}_chunk_{chunk_id}",
@@ -261,10 +284,16 @@ class TextChunker:
                     "word_count": len(current_chunk.split())
                 })
             
-            return chunks
+            return chunks if chunks else [{
+                "id": f"{source}_chunk_0",
+                "text": text[:self.chunk_size],
+                "source": source,
+                "word_count": len(text.split())
+            }]
+            
         except Exception as e:
             logger.error(f"Error chunking text: {e}")
-            # Return at least one chunk with the full text
+            # Return single chunk as fallback
             return [{
                 "id": f"{source}_chunk_0",
                 "text": text[:self.chunk_size],
@@ -273,9 +302,19 @@ class TextChunker:
             }]
     
     def _split_into_sentences(self, text: str) -> List[str]:
-        """Split text into sentences using regex"""
-        sentences = re.split(r'(?<=[.!?])\s+', text)
-        return [s.strip() for s in sentences if s.strip()]
+        """Split text into sentences using regex - improved for Python 3.12"""
+        # Enhanced sentence splitting pattern
+        sentence_pattern = r'(?<=[.!?])\s+(?=[A-Z])|(?<=\n)\s*(?=[A-Z])'
+        sentences = re.split(sentence_pattern, text)
+        
+        # Clean and filter sentences
+        cleaned_sentences = []
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if sentence and len(sentence) > 10:  # Filter very short fragments
+                cleaned_sentences.append(sentence)
+        
+        return cleaned_sentences if cleaned_sentences else [text]
 
 class VectorStore:
     def __init__(self):
@@ -283,17 +322,23 @@ class VectorStore:
         self.index = None
         self.embedding_model = None
         self.chunks_store = []  # Fallback storage
+        self.embedding_dim = 384  # for all-MiniLM-L6-v2
         self._initialize()
     
     def _initialize(self):
         """Initialize Pinecone and embedding model"""
         # Initialize embedding model first
-        try:
-            self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-            logger.info("Embedding model loaded successfully")
-        except Exception as e:
-            logger.error(f"Failed to load embedding model: {e}")
-            raise HTTPException(status_code=500, detail="Failed to initialize embedding model")
+        if SENTENCE_TRANSFORMERS_AVAILABLE:
+            try:
+                self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+                logger.info("Embedding model loaded successfully")
+            except Exception as e:
+                logger.error(f"Failed to load embedding model: {e}")
+                SENTENCE_TRANSFORMERS_AVAILABLE = False
+        
+        if not SENTENCE_TRANSFORMERS_AVAILABLE:
+            logger.warning("Sentence Transformers not available - using dummy embeddings")
+            self.embedding_model = self._create_dummy_embedding_model()
         
         # Try to initialize Pinecone
         if PINECONE_AVAILABLE and PINECONE_API_KEY:
@@ -301,23 +346,33 @@ class VectorStore:
                 self.pc = Pinecone(api_key=PINECONE_API_KEY)
                 self.index_name = "askllm"
                 
-                # Check if index exists, create if needed
-                existing_indexes = [idx.name for idx in self.pc.list_indexes()]
-                if self.index_name not in existing_indexes:
-                    self.pc.create_index(
-                        name=self.index_name,
-                        dimension=384,  # all-MiniLM-L6-v2 dimension
-                        metric="cosine",
-                        spec=ServerlessSpec(
-                            cloud="aws",
-                            region="us-east-1"
+                # Check if index exists
+                try:
+                    existing_indexes = self.pc.list_indexes()
+                    index_names = [idx.name for idx in existing_indexes]
+                    
+                    if self.index_name not in index_names:
+                        logger.info(f"Creating new Pinecone index: {self.index_name}")
+                        self.pc.create_index(
+                            name=self.index_name,
+                            dimension=self.embedding_dim,
+                            metric="cosine",
+                            spec=ServerlessSpec(
+                                cloud="aws",
+                                region="us-east-1"
+                            )
                         )
-                    )
-                    # Wait for index to be ready
-                    time.sleep(10)
-                
-                self.index = self.pc.Index(self.index_name)
-                logger.info("Pinecone initialized successfully")
+                        # Wait for index to be ready
+                        time.sleep(10)
+                    
+                    self.index = self.pc.Index(self.index_name)
+                    logger.info("Pinecone initialized successfully")
+                    
+                except Exception as e:
+                    logger.warning(f"Pinecone index operation failed: {e}")
+                    self.pc = None
+                    self.index = None
+                    
             except Exception as e:
                 logger.warning(f"Pinecone initialization failed, using fallback: {e}")
                 self.pc = None
@@ -325,33 +380,76 @@ class VectorStore:
         else:
             logger.info("Using in-memory vector search (Pinecone not available)")
     
+    def _create_dummy_embedding_model(self):
+        """Create a dummy embedding model for fallback"""
+        class DummyEmbeddingModel:
+            def encode(self, text, **kwargs):
+                if isinstance(text, str):
+                    # Simple hash-based embedding
+                    hash_val = hashlib.md5(text.encode()).hexdigest()
+                    return np.array([float(int(hash_val[i:i+2], 16)) / 255.0 
+                                   for i in range(0, min(len(hash_val), self.embedding_dim*2), 2)]
+                                  + [0.0] * (self.embedding_dim - min(len(hash_val)//2, self.embedding_dim)))
+                elif isinstance(text, list):
+                    return [self.encode(t) for t in text]
+                else:
+                    return np.zeros(self.embedding_dim)
+        
+        return DummyEmbeddingModel()
+    
     def embed_chunks(self, chunks: List[Dict[str, Any]]) -> None:
         """Embed and store chunks in vector database"""
         try:
             if self.index and PINECONE_AVAILABLE:
                 vectors_to_upsert = []
                 for chunk in chunks:
-                    embedding = self.embedding_model.encode(chunk["text"]).tolist()
-                    vectors_to_upsert.append({
-                        "id": chunk["id"],
-                        "values": embedding,
-                        "metadata": {
-                            "text": chunk["text"][:1000],  # Limit metadata size
-                            "source": chunk["source"],
-                            "word_count": chunk["word_count"]
-                        }
-                    })
+                    try:
+                        embedding = self.embedding_model.encode(chunk["text"])
+                        if hasattr(embedding, 'tolist'):
+                            embedding = embedding.tolist()
+                        elif isinstance(embedding, np.ndarray):
+                            embedding = embedding.tolist()
+                        
+                        vectors_to_upsert.append({
+                            "id": chunk["id"],
+                            "values": embedding,
+                            "metadata": {
+                                "text": chunk["text"][:1000],  # Limit metadata size
+                                "source": chunk["source"],
+                                "word_count": chunk["word_count"]
+                            }
+                        })
+                    except Exception as e:
+                        logger.warning(f"Failed to embed chunk {chunk['id']}: {e}")
+                        continue
                 
-                # Upsert in batches
-                batch_size = 100
-                for i in range(0, len(vectors_to_upsert), batch_size):
-                    batch = vectors_to_upsert[i:i+batch_size]
-                    self.index.upsert(vectors=batch)
+                if vectors_to_upsert:
+                    # Upsert in batches
+                    batch_size = 100
+                    for i in range(0, len(vectors_to_upsert), batch_size):
+                        batch = vectors_to_upsert[i:i+batch_size]
+                        try:
+                            self.index.upsert(vectors=batch)
+                        except Exception as e:
+                            logger.error(f"Failed to upsert batch {i//batch_size}: {e}")
+                
+                logger.info(f"Successfully embedded {len(vectors_to_upsert)} chunks to Pinecone")
             else:
                 # Fallback to in-memory storage
                 self.chunks_store = chunks.copy()
                 for chunk in self.chunks_store:
-                    chunk["embedding"] = self.embedding_model.encode(chunk["text"])
+                    try:
+                        embedding = self.embedding_model.encode(chunk["text"])
+                        if hasattr(embedding, 'tolist'):
+                            embedding = embedding.tolist()
+                        elif isinstance(embedding, np.ndarray):
+                            embedding = embedding.tolist()
+                        chunk["embedding"] = embedding
+                    except Exception as embed_error:
+                        logger.error(f"Failed to embed chunk: {embed_error}")
+                        # Use zero vector as fallback
+                        chunk["embedding"] = [0.0] * self.embedding_dim
+                        
                 logger.info(f"Stored {len(chunks)} chunks in memory")
         
         except Exception as e:
@@ -360,22 +458,30 @@ class VectorStore:
             self.chunks_store = chunks.copy()
             for chunk in self.chunks_store:
                 try:
-                    chunk["embedding"] = self.embedding_model.encode(chunk["text"])
+                    embedding = self.embedding_model.encode(chunk["text"])
+                    if hasattr(embedding, 'tolist'):
+                        embedding = embedding.tolist()
+                    elif isinstance(embedding, np.ndarray):
+                        embedding = embedding.tolist()
+                    chunk["embedding"] = embedding
                 except Exception as embed_error:
                     logger.error(f"Failed to embed chunk: {embed_error}")
-                    # Use zero vector as fallback
-                    chunk["embedding"] = np.zeros(384)
+                    chunk["embedding"] = [0.0] * self.embedding_dim
     
     def search_similar_chunks(self, query: str, top_k: int = 5) -> List[ClauseMatch]:
         """Search for similar chunks using vector similarity"""
         try:
             query_embedding = self.embedding_model.encode(query)
+            if hasattr(query_embedding, 'tolist'):
+                query_embedding = query_embedding.tolist()
+            elif isinstance(query_embedding, np.ndarray):
+                query_embedding = query_embedding.tolist()
             
             if self.index and PINECONE_AVAILABLE:
                 try:
                     # Use Pinecone
                     results = self.index.query(
-                        vector=query_embedding.tolist(),
+                        vector=query_embedding,
                         top_k=top_k,
                         include_metadata=True
                     )
@@ -402,9 +508,16 @@ class VectorStore:
             for chunk in self.chunks_store:
                 try:
                     chunk_emb = np.array(chunk["embedding"])
-                    similarity = np.dot(query_emb, chunk_emb) / (
-                        np.linalg.norm(query_emb) * np.linalg.norm(chunk_emb) + 1e-10
-                    )
+                    # Cosine similarity
+                    dot_product = np.dot(query_emb, chunk_emb)
+                    norm_query = np.linalg.norm(query_emb)
+                    norm_chunk = np.linalg.norm(chunk_emb)
+                    
+                    if norm_query > 0 and norm_chunk > 0:
+                        similarity = dot_product / (norm_query * norm_chunk)
+                    else:
+                        similarity = 0.0
+                    
                     similarities.append((similarity, chunk))
                 except Exception as e:
                     logger.warning(f"Error computing similarity: {e}")
@@ -472,13 +585,14 @@ class LLMProcessor:
             
             response_text = response.text.strip()
             # Extract JSON from response
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            json_match = re.search(r'\{[^{}]*\}', response_text, re.DOTALL)
             if json_match:
                 try:
                     parsed_data = json.loads(json_match.group())
+                    parsed_data["raw_query"] = query  # Ensure raw_query is set
                     return StructuredQuery(**parsed_data)
-                except json.JSONDecodeError:
-                    logger.warning("Failed to parse JSON from LLM response, using fallback")
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(f"Failed to parse JSON from LLM response: {e}")
                     return self._fallback_parse_query(query)
             else:
                 return self._fallback_parse_query(query)
@@ -489,35 +603,46 @@ class LLMProcessor:
     
     def _fallback_parse_query(self, query: str) -> StructuredQuery:
         """Fallback query parsing using regex"""
-        structured = StructuredQuery(raw_query=query)
+        structured_data = {"raw_query": query}
         
         # Extract age
         age_match = re.search(r'(\d+)[-\s]*(?:year|yr|M|F|male|female)', query, re.IGNORECASE)
         if age_match:
             try:
-                structured.age = int(age_match.group(1))
+                structured_data["age"] = int(age_match.group(1))
             except ValueError:
                 pass
         
         # Extract gender
-        if re.search(r'\b(male|M)\b', query, re.IGNORECASE):
-            structured.gender = "male"
+        if re.search(r'\b(male|M)\b', query, re.IGNORECASE) and not re.search(r'\b(female|F)\b', query, re.IGNORECASE):
+            structured_data["gender"] = "male"
         elif re.search(r'\b(female|F)\b', query, re.IGNORECASE):
-            structured.gender = "female"
+            structured_data["gender"] = "female"
         
         # Extract procedures (common medical terms)
-        procedures = ['surgery', 'treatment', 'procedure', 'operation', 'therapy']
-        for proc in procedures:
-            if proc in query.lower():
-                structured.procedure = proc
+        procedure_patterns = [
+            r'(\w+\s+surgery)', r'(\w+\s+treatment)', r'(\w+\s+procedure)',
+            r'(\w+\s+operation)', r'(\w+\s+therapy)', r'(surgery)', r'(treatment)'
+        ]
+        for pattern in procedure_patterns:
+            match = re.search(pattern, query, re.IGNORECASE)
+            if match:
+                structured_data["procedure"] = match.group(1).lower()
+                break
+        
+        # Extract location (common Indian cities)
+        cities = ['mumbai', 'delhi', 'bangalore', 'pune', 'chennai', 'kolkata', 'hyderabad']
+        for city in cities:
+            if city in query.lower():
+                structured_data["location"] = city.title()
                 break
         
         # Extract policy duration
-        duration_match = re.search(r'(\d+)[-\s]*(month|year|day)', query, re.IGNORECASE)
+        duration_match = re.search(r'(\d+)[-\s]*(month|year|day)s?', query, re.IGNORECASE)
         if duration_match:
-            structured.policy_duration = f"{duration_match.group(1)} {duration_match.group(2)}s"
+            structured_data["policy_duration"] = f"{duration_match.group(1)} {duration_match.group(2).lower()}s"
         
-        return structured
+        return StructuredQuery(**structured_data)
     
     async def analyze_and_decide(self, query: StructuredQuery, relevant_chunks: List[ClauseMatch]) -> str:
         """Analyze retrieved chunks and make a decision"""
@@ -525,7 +650,7 @@ class LLMProcessor:
             return self._fallback_analyze(query, relevant_chunks)
         
         chunks_text = "\n\n".join([
-            f"Clause {i+1}: {chunk.text[:500]}" 
+            f"Clause {i+1} (Score: {chunk.score:.2f}): {chunk.text[:500]}" 
             for i, chunk in enumerate(relevant_chunks[:3])  # Limit to top 3 chunks
         ])
         
@@ -534,13 +659,13 @@ class LLMProcessor:
         
         QUERY DETAILS:
         - Raw Query: {query.raw_query}
-        - Age: {query.age}
-        - Gender: {query.gender}
-        - Procedure: {query.procedure}
-        - Location: {query.location}
-        - Policy Duration: {query.policy_duration}
+        - Age: {query.age or "Not specified"}
+        - Gender: {query.gender or "Not specified"}
+        - Procedure: {query.procedure or "Not specified"}
+        - Location: {query.location or "Not specified"}
+        - Policy Duration: {query.policy_duration or "Not specified"}
         
-        RELEVANT CLAUSES:
+        RELEVANT DOCUMENT CLAUSES:
         {chunks_text}
         
         TASK:
@@ -599,7 +724,7 @@ vector_store = VectorStore()
 llm_processor = LLMProcessor()
 
 # Dependency for authentication
-async def verify_token(authorization: str = Header(None)):
+async def verify_token(authorization: Optional[str] = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
     
@@ -616,9 +741,11 @@ async def health_check():
     return {
         "status": "ok", 
         "timestamp": datetime.utcnow().isoformat(),
+        "python_version": sys.version,
         "services": {
             "gemini": "available" if GEMINI_AVAILABLE and GEMINI_API_KEY else "not_configured",
             "pinecone": "available" if PINECONE_AVAILABLE and PINECONE_API_KEY else "fallback_mode",
+            "sentence_transformers": "available" if SENTENCE_TRANSFORMERS_AVAILABLE else "fallback_mode",
             "embedding_model": "loaded" if vector_store.embedding_model else "error"
         }
     }
@@ -714,7 +841,7 @@ async def analyze_structured(
                 # Create structured response
                 decision_response = {
                     "question": question,
-                    "structured_query": structured_query.dict(),
+                    "structured_query": structured_query.model_dump(),  # Updated for Pydantic v2
                     "decision": "covered" if any(word in analysis.lower() for word in ["yes", "covered", "eligible"]) else "not_covered",
                     "analysis": analysis,
                     "relevant_clauses": [
@@ -765,8 +892,10 @@ async def global_exception_handler(request, exc):
 if __name__ == "__main__":
     # Run the server
     logger.info(f"Starting server on port {PORT}")
+    logger.info(f"Python version: {sys.version}")
     logger.info(f"Gemini available: {GEMINI_AVAILABLE and GEMINI_API_KEY is not None}")
     logger.info(f"Pinecone available: {PINECONE_AVAILABLE and PINECONE_API_KEY is not None}")
+    logger.info(f"Sentence Transformers available: {SENTENCE_TRANSFORMERS_AVAILABLE}")
     
     uvicorn.run(
         "main:app",
