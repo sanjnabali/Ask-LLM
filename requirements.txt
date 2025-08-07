@@ -32,8 +32,8 @@ asyncpg==0.29.0
 google-generativeai==0.7.2
 
 # Pydantic & Config
-pydantic==2.6.4            # ✅ Rust-free version
-pydantic-settings==2.2.1   # ✅ Compatible with Pydantic v2
+pydantic==1.10.14
+pydantic-settings==0.4.0   # ✅ Compatible with Pydantic v1
 typing-extensions==4.12.2
 
 # Utilities
