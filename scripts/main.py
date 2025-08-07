@@ -92,6 +92,12 @@ if GEMINI_AVAILABLE and GEMINI_API_KEY:
         logger.error(f"Failed to configure Gemini AI: {e}")
         GEMINI_AVAILABLE = False
 
+logger.info(f"Starting server setup")
+logger.info(f"Python version: {sys.version}")
+logger.info(f"Gemini available: {GEMINI_API_KEY is not None and GEMINI_AVAILABLE}")
+logger.info(f"Pinecone available: {PINECONE_API_KEY is not None and PINECONE_AVAILABLE}")
+logger.info(f"Sentence Transformers available: {SENTENCE_TRANSFORMERS_AVAILABLE}")
+
 # FastAPI app
 app = FastAPI(
     title="Document Analysis System",
@@ -889,18 +895,3 @@ async def global_exception_handler(request, exc):
         content={"detail": "Internal server error"}
     )
 
-if __name__ == "__main__":
-    # Run the server
-    logger.info(f"Starting server on port {PORT}")
-    logger.info(f"Python version: {sys.version}")
-    logger.info(f"Gemini available: {GEMINI_AVAILABLE and GEMINI_API_KEY is not None}")
-    logger.info(f"Pinecone available: {PINECONE_AVAILABLE and PINECONE_API_KEY is not None}")
-    logger.info(f"Sentence Transformers available: {SENTENCE_TRANSFORMERS_AVAILABLE}")
-    
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=PORT,
-        reload=False,  # Disable reload in production
-        log_level="info"
-    )
