@@ -6,7 +6,7 @@ services:
     buildCommand: |
       apt-get update && \
       apt-get install -y build-essential libmupdf-dev libjpeg-dev zlib1g-dev libtesseract-dev && \
-      pip install --upgrade pip setuptools wheel && \
+      pip install --upgrade pip setuptools wheel maturin && \
       pip install -r requirements.txt
     startCommand: python main.py
     envVars:
@@ -22,4 +22,9 @@ services:
         value: askllm
       - key: PORT
         value: 10000
+      # Rust/Maturin cache directories set to writable paths
+      - key: CARGO_HOME
+        value: /tmp/.cargo
+      - key: CARGO_TARGET_DIR
+        value: /tmp/.cargo-target
     healthCheckPath: /health
