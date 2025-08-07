@@ -18,18 +18,20 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ConfigDict
 import uvicorn
 
+logger = logging.getLogger(__name__)
 # Document processing
 try:
     import fitz  # PyMuPDF
 except ImportError:
     fitz = None
-    print("Warning: PyMuPDF not available, PDF processing disabled")
+    logger.warning("PyMuPDF not available, PDF processing disabled")
+
 
 try:
     from docx import Document as DocxDocument
 except ImportError:
     DocxDocument = None
-    print("Warning: python-docx not available, DOCX processing disabled")
+    logger.warning("python-docx not available, DOCX processing disabled")
 
 from bs4 import BeautifulSoup
 import requests
@@ -40,7 +42,7 @@ try:
     PINECONE_AVAILABLE = True
 except ImportError:
     PINECONE_AVAILABLE = False
-    print("Warning: Pinecone not available, using fallback vector search")
+    logger.warning("Pinecone not available, using fallback vector search")
 
 import numpy as np
 try:
@@ -48,7 +50,7 @@ try:
     SENTENCE_TRANSFORMERS_AVAILABLE = True
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
-    print("Warning: Sentence Transformers not available")
+    logger.warning("Sentence Transformers not available")
 
 # LLM - Updated for Python 3.12
 try:
@@ -57,7 +59,7 @@ try:
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
-    print("Warning: Google Generative AI not available")
+    logger.warning("Google Generative AI not available")
 
 # Utils
 from urllib.parse import urlparse
@@ -73,7 +75,7 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)
     ]
 )
-logger = logging.getLogger(__name__)
+
 
 # Environment variables with fallbacks
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
