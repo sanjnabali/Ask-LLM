@@ -136,7 +136,7 @@ services:
       python -c "import numpy; print('NumPy:', numpy.__version__)"
       python -c "import sentence_transformers; print('SentenceTransformers: OK')" || echo "SentenceTransformers: Will use fallback"
     
-    startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     
     envVars:
       - key: PYTHON_VERSION
