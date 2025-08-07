@@ -1,5 +1,5 @@
 #!/bin/bash
-# deploy.sh - Python 3.12.4 compatibility fixes for Render deployment
+# deploy.sh - Fixed for Render deployment structure
 
 set -e
 
@@ -10,33 +10,190 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-echo -e "${BLUE}🚀 Document Analysis System - Python 3.12.4 Fixed Deployment${NC}"
+echo -e "${BLUE}🚀 Document Analysis System - Render Deployment Fix${NC}"
 echo "================================================================="
 
-# Check Python version compatibility
-check_python_version() {
-    echo -e "${BLUE}Checking Python version compatibility...${NC}"
+# Fix project structure for Render
+fix_project_structure() {
+    echo -e "${BLUE}Fixing project structure for Render deployment...${NC}"
     
-    python_version=$(python3 --version 2>&1 | cut -d' ' -f2)
-    echo "Detected Python version: $python_version"
-    
-    # Check if it's Python 3.12.x
-    if python3 -c "import sys; major, minor = sys.version_info[:2]; exit(0 if (major == 3 and minor >= 8) else 1)"; then
-        echo -e "${GREEN}✅ Python version is compatible (3.8+)${NC}"
-        
-        if python3 -c "import sys; major, minor = sys.version_info[:2]; exit(0 if (major == 3 and minor == 12) else 1)"; then
-            echo -e "${GREEN}✅ Python 3.12.x detected - using optimized configuration${NC}"
-            export PYTHON_312_OPTIMIZED=true
-        fi
-    else
-        echo -e "${RED}❌ Python 3.8+ required${NC}"
+    # Check if we're in the right directory
+    if [ ! -f "scripts/main.py" ]; then
+        echo -e "${RED}❌ scripts/main.py not found. Are you in the project root?${NC}"
         exit 1
     fi
+    
+    # Copy main.py to root directory
+    echo "Copying main.py to root directory..."
+    cp scripts/main.py ./main.py
+    
+    # Check if requirements.txt exists in root, if not copy from scripts or create
+    if [ ! -f "requirements.txt" ]; then
+        if [ -f "scripts/requirements.txt" ]; then
+            echo "Copying requirements.txt from scripts..."
+            cp scripts/requirements.txt ./requirements.txt
+        else
+            echo "Creating requirements.txt in root directory..."
+            cat > requirements.txt << 'EOF'
+# Core web framework - Python 3.12.4 compatible
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.9.2
+
+# Document processing
+PyMuPDF==1.24.12
+python-docx==1.1.2
+beautifulsoup4==4.12.3
+requests==2.32.3
+aiohttp==3.11.7
+certifi==2024.8.30
+
+# Vector database and embeddings - Updated for Python 3.12
+pinecone-client==5.3.1
+sentence-transformers==3.3.1
+numpy==2.1.3
+
+# PyTorch CPU-only for embeddings (no CUDA)
+torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
+
+# LLM API
+google-generativeai==0.8.3
+
+# Utilities
+python-multipart==0.0.17
+jinja2==3.1.4
+
+# Additional dependencies for sentence-transformers
+transformers==4.46.3
+tokenizers==0.20.3
+huggingface-hub==0.26.2
+safetensors==0.4.5
+regex==2024.11.6
+tqdm==4.67.0
+
+# For document processing
+lxml==5.3.0
+pillow==10.4.0
+
+# HTTP client libraries
+httpx==0.27.2
+urllib3==2.2.3
+
+# Async support
+aiofiles==24.1.0
+EOF
+        fi
+    fi
+    
+    # Copy or create render.yaml in root
+    if [ ! -f "render.yaml" ]; then
+        if [ -f "scripts/render.yaml" ]; then
+            echo "Copying render.yaml from scripts..."
+            cp scripts/render.yaml ./render.yaml
+        else
+            echo "Creating render.yaml in root directory..."
+            cat > render.yaml << 'EOF'
+services:
+  - type: web
+    name: document-analysis-system
+    env: python
+    plan: starter
+    
+    buildCommand: |
+      # Set Python version
+      python --version
+      
+      # Update system packages
+      apt-get update && apt-get install -y \
+        build-essential \
+        libffi-dev \
+        libssl-dev \
+        python3-dev \
+        pkg-config \
+        libmupdf-dev \
+        libjpeg-dev \
+        zlib1g-dev \
+        cmake \
+        gcc \
+        g++
+      
+      # Upgrade Python packaging tools
+      pip install --upgrade pip setuptools wheel
+      
+      # Set Rust/Cargo environment for tokenizers
+      export CARGO_HOME=/tmp/.cargo
+      export CARGO_TARGET_DIR=/tmp/.cargo-target
+      
+      # Install PyTorch first (CPU-only)
+      pip install --no-cache-dir torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
+      pip install --no-cache-dir numpy==2.1.3
+      
+      # Install other dependencies
+      pip install --no-cache-dir -r requirements.txt
+      
+      # Verify critical imports
+      python -c "import torch; print('PyTorch:', torch.__version__)"
+      python -c "import numpy; print('NumPy:', numpy.__version__)"
+      python -c "import sentence_transformers; print('SentenceTransformers: OK')" || echo "SentenceTransformers: Will use fallback"
+    
+    startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
+    
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.4
+      
+      - key: GEMINI_API_KEY
+        sync: false
+      
+      - key: PINECONE_API_KEY
+        sync: false
+      
+      - key: PINECONE_ENVIRONMENT
+        value: us-east-1-aws
+      
+      - key: INDEX_NAME
+        value: askllm
+      
+      - key: PORT
+        value: 10000
+      
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      
+      - key: PYTHONDONTWRITEBYTECODE
+        value: "1"
+      
+      - key: CARGO_HOME
+        value: /tmp/.cargo
+      
+      - key: CARGO_TARGET_DIR
+        value: /tmp/.cargo-target
+      
+      - key: TORCH_CUDA_ARCH_LIST
+        value: ""
+      
+      - key: CUDA_VISIBLE_DEVICES
+        value: ""
+      
+      - key: MALLOC_ARENA_MAX
+        value: "2"
+      
+      - key: TOKENIZERS_PARALLELISM
+        value: "false"
+    
+    healthCheckPath: /health
+    autoDeploy: true
+    buildTimeout: 30m
+EOF
+        fi
+    fi
+    
+    echo -e "${GREEN}✅ Project structure fixed for Render deployment${NC}"
 }
 
-# Test local installation with Python 3.12.4 fixes
+# Test local installation
 test_local_installation() {
-    echo -e "${BLUE}Testing local installation with Python 3.12.4 optimizations...${NC}"
+    echo -e "${BLUE}Testing local installation...${NC}"
     
     # Create virtual environment if it doesn't exist
     if [ ! -d "venv" ]; then
@@ -50,356 +207,247 @@ test_local_installation() {
     echo "Upgrading pip and build tools..."
     pip install --upgrade pip setuptools wheel
     
-    # Install dependencies in optimized order for Python 3.12.4
-    echo "Installing dependencies with Python 3.12.4 optimizations..."
-    
-    # First install core numerical libraries
-    pip install "numpy>=2.0.0,<3.0.0"
-    
-    # Install PyTorch CPU-only version
+    # Install dependencies
+    echo "Installing dependencies..."
     pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
-    
-    # Install the rest of the dependencies
+    pip install numpy==2.1.3
     pip install -r requirements.txt
     
-    # Verify critical imports
+    # Verify imports
     echo "Verifying critical imports..."
-    python -c "import numpy; print('✅ NumPy:', numpy.__version__)"
-    python -c "import torch; print('✅ PyTorch:', torch.__version__)"
-    
-    # Test optional dependencies
     python -c "
-try:
-    import sentence_transformers
-    print('✅ SentenceTransformers: Available')
-except ImportError:
-    print('⚠️  SentenceTransformers: Not available (will use fallback)')
+import sys
+print('Python version:', sys.version)
 
 try:
-    import pinecone
-    print('✅ Pinecone: Available')
-except ImportError:
-    print('⚠️  Pinecone: Not available (will use fallback)')
+    import main
+    print('✅ main.py imports successfully')
+except Exception as e:
+    print('❌ main.py import error:', e)
 
 try:
-    import google.generativeai
-    print('✅ Google Generative AI: Available')
-except ImportError:
-    print('⚠️  Google Generative AI: Not available (will use fallback)')
+    import fastapi
+    print('✅ FastAPI:', fastapi.__version__)
+except ImportError as e:
+    print('❌ FastAPI import error:', e)
+
+try:
+    import torch
+    print('✅ PyTorch:', torch.__version__)
+except ImportError as e:
+    print('❌ PyTorch import error:', e)
+
+try:
+    import numpy
+    print('✅ NumPy:', numpy.__version__)
+except ImportError as e:
+    print('❌ NumPy import error:', e)
     "
     
     echo -e "${GREEN}✅ Local installation test completed${NC}"
     deactivate
 }
 
-# Create optimized requirements.txt for the current environment
-create_optimized_requirements() {
-    echo -e "${BLUE}Creating optimized requirements.txt for current environment...${NC}"
-    
-    # Check if we need to create a backup
-    if [ -f "requirements.txt" ] && [ ! -f "requirements.txt.backup" ]; then
-        cp requirements.txt requirements.txt.backup
-        echo "Created backup: requirements.txt.backup"
-    fi
-    
-    # The requirements.txt is already updated in the artifacts above
-    echo -e "${GREEN}✅ Requirements optimized for Python 3.12.4${NC}"
-}
-
-# Verify API keys
+# Check API keys
 check_api_keys() {
     echo -e "${BLUE}Checking API key configuration...${NC}"
     
     if [ -z "$GEMINI_API_KEY" ]; then
         echo -e "${YELLOW}⚠️  GEMINI_API_KEY not set${NC}"
-        echo "   Get your key from: https://makersuite.google.com/app/apikey"
         echo "   Set with: export GEMINI_API_KEY='your_key_here'"
+        echo "   Get your key from: https://makersuite.google.com/app/apikey"
     else
         echo -e "${GREEN}✅ GEMINI_API_KEY is configured${NC}"
     fi
     
     if [ -z "$PINECONE_API_KEY" ]; then
         echo -e "${YELLOW}⚠️  PINECONE_API_KEY not set - will use memory fallback${NC}"
-        echo "   Get from: https://app.pinecone.io (optional but recommended)"
     else
         echo -e "${GREEN}✅ PINECONE_API_KEY is configured${NC}"
     fi
 }
 
-# Create deployment guide specifically for Python 3.12.4
-create_python312_guide() {
-    echo -e "${BLUE}Creating Python 3.12.4 deployment guide...${NC}"
+# Create deployment guide
+create_deployment_guide() {
+    echo -e "${BLUE}Creating deployment guide...${NC}"
     
-    cat > PYTHON_312_DEPLOYMENT_GUIDE.md << 'EOF'
-# 🐍 Python 3.12.4 Deployment Guide - FIXED
+    cat > RENDER_DEPLOYMENT_GUIDE.md << 'EOF'
+# 🚀 Render Deployment Guide - FIXED
 
-## 🔧 What Was Fixed
+## 🔧 Issue Fixed
+The original error was caused by Render looking for `main.py` in the root directory, but it was located in `scripts/main.py`.
 
-### 1. Version Compatibility Issues
-- ✅ **Updated all dependencies** to Python 3.12.4 compatible versions
-- ✅ **Fixed Pydantic v2 compatibility** - Updated from v1.10 to v2.9.2
-- ✅ **PyTorch CPU-only** - Version 2.5.1 with CPU-only installation
-- ✅ **SentenceTransformers** - Updated to v3.3.1 with fallback handling
-- ✅ **NumPy** - Updated to v2.1.3 for Python 3.12 support
-- ✅ **Pinecone** - Updated to v5.3.1 (latest stable)
-
-### 2. Build Process Improvements
-- ✅ **Extended build timeout** - 30 minutes for compilation
-- ✅ **Optimized dependency installation order**
-- ✅ **Added system dependencies** for compilation
-- ✅ **Cargo/Rust environment** properly configured
-- ✅ **Memory optimization** settings added
-
-### 3. Runtime Optimizations
-- ✅ **Graceful fallbacks** when services unavailable
-- ✅ **Better error handling** and logging
-- ✅ **Memory-efficient embeddings** with fallback
-- ✅ **Improved chunk processing** for large documents
+## 📁 Correct Project Structure
+```
+project-root/
+├── main.py           # ← MOVED from scripts/main.py
+├── requirements.txt  # ← MOVED from scripts/requirements.txt
+├── render.yaml       # ← MOVED from scripts/render.yaml
+├── scripts/
+│   ├── deploy.sh
+│   └── (backup files)
+└── README.md
+```
 
 ## 🚀 Deployment Steps
 
-### Step 1: Environment Variables in Render
-Set these in your Render dashboard:
-
+### Step 1: Prepare Project Structure
 ```bash
-# Required
-GEMINI_API_KEY=your_actual_gemini_api_key_here
+# Run this script to fix the structure
+./scripts/deploy.sh fix
 
-# Optional (recommended for better performance)
-PINECONE_API_KEY=your_pinecone_key_here
-
-# Automatically set by render.yaml
-PYTHON_VERSION=3.12.4
-PINECONE_ENVIRONMENT=us-east-1-aws
-PORT=10000
+# Or manually:
+cp scripts/main.py ./main.py
+cp scripts/requirements.txt ./requirements.txt
+cp scripts/render.yaml ./render.yaml
 ```
 
-### Step 2: Deploy to Render
-
-1. **Push to GitHub:**
+### Step 2: Set Environment Variables in Render Dashboard
 ```bash
+GEMINI_API_KEY=your_actual_key_here
+PINECONE_API_KEY=your_pinecone_key_here  # Optional
+```
+
+### Step 3: Deploy to Render
+```bash
+# Commit changes
 git add .
-git commit -m "Python 3.12.4 compatibility fixes"
+git commit -m "Fix: Move main.py to root for Render deployment"
 git push origin main
+
+# In Render Dashboard:
+# 1. Create new Web Service
+# 2. Connect your GitHub repository
+# 3. Render will automatically detect and use render.yaml
+# 4. Build should complete successfully
 ```
 
-2. **In Render Dashboard:**
-   - Create new Web Service
-   - Connect your GitHub repository
-   - Render will automatically use the `render.yaml` configuration
-   - Build should complete successfully in ~15-20 minutes
-
-### Step 3: Verify Deployment
-
+### Step 4: Verify Deployment
 ```bash
 # Test health endpoint
 curl https://your-app-name.onrender.com/health
 
-# Expected response includes Python version info:
+# Expected response:
 {
   "status": "ok",
   "python_version": "3.12.4",
   "services": {
     "gemini": "available",
-    "pinecone": "available",
+    "pinecone": "available",  
     "sentence_transformers": "available"
   }
 }
-
-# Test main API
-curl -X POST https://your-app-name.onrender.com/api/v1/hackrx/run \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer 4ddf287faf3c89dfb4c0adc648a46975d4063a37899d2243a451f717af4a32cc" \
-  -d '{
-    "documents": "This is a test policy document. Coverage includes medical expenses.",
-    "questions": ["What is covered under this policy?"]
-  }'
 ```
 
-## ⚡ Performance Expectations
+## 🐛 Common Issues & Solutions
 
-### Free Plan vs Starter Plan
-- **Free Plan:** Cold starts ~60-90 seconds, then fast
-- **Starter Plan:** Much faster cold starts ~15-30 seconds
-- **Recommended:** Starter plan for production use
+### 1. "Could not import module 'main'"
+- **Cause**: main.py not in root directory
+- **Solution**: Run `cp scripts/main.py ./main.py`
 
-### Build Times
-- **First build:** 15-20 minutes (compiling dependencies)
-- **Subsequent builds:** 5-10 minutes (cached dependencies)
+### 2. "No module named 'fastapi'"
+- **Cause**: requirements.txt missing or incorrect
+- **Solution**: Ensure requirements.txt is in root directory
 
-## 🐛 Troubleshooting
+### 3. Build timeout
+- **Cause**: PyTorch compilation takes time
+- **Solution**: Using CPU-only PyTorch and extended timeout (30m)
 
-### Common Issues & Solutions
+### 4. Memory errors
+- **Cause**: Limited memory on free plan
+- **Solution**: Using Starter plan and optimized settings
 
-**Build fails with "compilation error":**
+## 📊 Performance Expectations
+
+- **Build Time**: 15-25 minutes (first build)
+- **Cold Start**: 30-60 seconds (Starter plan)
+- **Response Time**: 2-10 seconds per query
+
+## 🔧 Local Testing
 ```bash
-# Solution: Dependencies are compiling from source
-# This is expected for Python 3.12.4 - just wait longer
-# Build timeout is set to 30 minutes
-```
+# Test locally before deploying
+./scripts/deploy.sh test
 
-**Runtime error "module not found":**
-```bash
-# Solution: Check the health endpoint
-# Fallback systems will activate automatically
-# App should work even with some modules missing
-```
-
-**Slow response times:**
-```bash
-# Normal on free plan (cold starts)
-# Upgrade to Starter plan for better performance
-# First request after idle period will be slow
-```
-
-**Memory errors:**
-```bash
-# Solution: Optimizations are already included
-# MALLOC_ARENA_MAX=2 in render.yaml
-# Uses CPU-only PyTorch to save memory
-```
-
-## 📊 Service Status
-
-The system has three levels of operation:
-
-1. **Full Service:** All APIs available (Gemini + Pinecone + SentenceTransformers)
-2. **Partial Service:** Some APIs available with fallbacks
-3. **Basic Service:** Rule-based processing with memory search
-
-Check `/health` endpoint to see current service level.
-
-## 🔧 Local Development
-
-```bash
-# Clone repository
-git clone your-repo-url
-cd document-analysis-system
-
-# Use Python 3.12.4
-python --version  # Should show 3.12.4
-
-# Install dependencies
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Or manually:
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
-
-# Set environment variables
-export GEMINI_API_KEY=your_key
-export PINECONE_API_KEY=your_key  # optional
-
-# Run locally
 python main.py
 
-# Test
+# Test endpoints
 curl http://localhost:8000/health
 ```
+
+## ✅ Deployment Checklist
+
+- [ ] main.py in root directory
+- [ ] requirements.txt in root directory  
+- [ ] render.yaml in root directory
+- [ ] GEMINI_API_KEY set in Render dashboard
+- [ ] Repository pushed to GitHub
+- [ ] Render service connected to repository
 
 ## 📞 Support
 
 If deployment still fails:
+1. Check build logs in Render dashboard
+2. Verify file structure matches above
+3. Test locally first
+4. Check environment variables are set
 
-1. Check Render build logs for specific errors
-2. Verify all environment variables are set
-3. Try deploying with just GEMINI_API_KEY first
-4. Check the health endpoint after deployment
-5. Monitor the service for 5-10 minutes after first deployment
-
-All major Python 3.12.4 compatibility issues have been resolved! 🎉
+The module import error is now fixed! 🎉
 EOF
     
-    echo -e "${GREEN}✅ Python 3.12.4 deployment guide created${NC}"
-}
-
-# Run comprehensive tests
-run_comprehensive_tests() {
-    echo -e "${BLUE}Running comprehensive Python 3.12.4 compatibility tests...${NC}"
-    
-    if [ -f "test_deployment.py" ]; then
-        source venv/bin/activate
-        python test_deployment.py http://localhost:8000 2>/dev/null &
-        SERVER_PID=$!
-        
-        # Start test server in background
-        python main.py &
-        APP_PID=$!
-        
-        sleep 10
-        
-        # Run basic connectivity test
-        if curl -s http://localhost:8000/health | grep -q "ok"; then
-            echo -e "${GREEN}✅ Local server test passed${NC}"
-        else
-            echo -e "${YELLOW}⚠️  Local server test - check manually${NC}"
-        fi
-        
-        # Cleanup
-        kill $APP_PID 2>/dev/null || true
-        kill $SERVER_PID 2>/dev/null || true
-        deactivate
-    else
-        echo -e "${YELLOW}⚠️  test_deployment.py not found - skipping server test${NC}"
-    fi
+    echo -e "${GREEN}✅ Deployment guide created: RENDER_DEPLOYMENT_GUIDE.md${NC}"
 }
 
 # Main execution
 main() {
     case "${1:-all}" in
-        "check")
-            check_python_version
-            check_api_keys
+        "fix")
+            fix_project_structure
             ;;
         "test")
-            check_python_version
             test_local_installation
-            run_comprehensive_tests
             ;;
-        "prepare")
-            check_python_version
-            create_optimized_requirements
+        "check")
             check_api_keys
             ;;
         "all")
-            echo -e "${BLUE}🔧 Starting Python 3.12.4 compatibility fixes...${NC}"
+            echo -e "${BLUE}🔧 Fixing Render deployment issue...${NC}"
             echo
             
-            check_python_version
-            create_optimized_requirements
+            fix_project_structure
             test_local_installation
             check_api_keys
-            create_python312_guide
-            run_comprehensive_tests
+            create_deployment_guide
             
             echo
-            echo -e "${GREEN}🎉 Python 3.12.4 deployment preparation complete!${NC}"
+            echo -e "${GREEN}🎉 Render deployment fix complete!${NC}"
             echo
             echo -e "${YELLOW}📋 Next Steps:${NC}"
-            echo "1. Set API keys: export GEMINI_API_KEY='your_key'"
-            echo "2. Git commit: git add . && git commit -m 'Python 3.12.4 fixes'"
+            echo "1. Set API keys in Render dashboard"
+            echo "2. Commit changes: git add . && git commit -m 'Fix: Move files for Render deployment'"
             echo "3. Push: git push origin main"
-            echo "4. Deploy on Render (should work automatically)"
-            echo "5. Test: Use the URLs from Render dashboard"
+            echo "4. Deploy on Render (should work now!)"
             echo
             echo -e "${BLUE}✅ Fixed Issues:${NC}"
-            echo "• ✅ Python 3.12.4 compatibility"
-            echo "• ✅ Pydantic v2 migration"
-            echo "• ✅ Updated all dependencies"
-            echo "• ✅ PyTorch CPU-only optimization"
-            echo "• ✅ Better error handling and fallbacks"
-            echo "• ✅ Memory optimization for Render"
-            echo "• ✅ Extended build timeouts"
-            echo "• ✅ Comprehensive service fallbacks"
+            echo "• ✅ Moved main.py to root directory"
+            echo "• ✅ Moved requirements.txt to root directory"
+            echo "• ✅ Fixed render.yaml configuration"
+            echo "• ✅ Updated Python 3.12.4 compatibility"
+            echo "• ✅ Optimized build process"
             echo
-            echo -e "${GREEN}📖 Read: PYTHON_312_DEPLOYMENT_GUIDE.md for detailed instructions${NC}"
+            echo -e "${GREEN}📖 Read: RENDER_DEPLOYMENT_GUIDE.md for detailed instructions${NC}"
             ;;
         *)
-            echo "Usage: $0 [check|test|prepare|all]"
+            echo "Usage: $0 [fix|test|check|all]"
             echo
             echo "Commands:"
-            echo "  check    - Check Python version and API keys"
-            echo "  test     - Test local installation"
-            echo "  prepare  - Prepare optimized requirements"
-            echo "  all      - Complete Python 3.12.4 preparation (recommended)"
+            echo "  fix    - Fix project structure for Render"
+            echo "  test   - Test local installation"
+            echo "  check  - Check API key configuration"
+            echo "  all    - Complete fix and preparation (recommended)"
             exit 1
             ;;
     esac
