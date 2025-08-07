@@ -49,3 +49,8 @@ regex==2024.5.15
 safetensors==0.4.3
 sympy==1.12.1
 mpmath==1.3.0
+
+# Build tools
+pip>=25.2
+setuptools>=70.0.0
+wheel>=0.43.0
