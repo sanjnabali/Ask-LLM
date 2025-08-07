@@ -81,7 +81,8 @@ PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT", "us-east-1-aws")
 DATABASE_URL = os.getenv("DATABASE_URL")
 PORT = int(os.getenv("PORT", 8000))
-AUTH_TOKEN = "4ddf287faf3c89dfb4c0adc648a46975d4063a37899d2243a451f717af4a32cc"
+AUTH_TOKEN = os.getenv("AUTH_TOKEN")
+
 
 # Initialize Gemini if available
 if GEMINI_AVAILABLE and GEMINI_API_KEY:
