@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, validator
 import uvicorn
 
 # Document processing
-import PyMuPDF  # fitz
+import fitz  # fitz
 from docx import Document
 from bs4 import BeautifulSoup
 import requests
