@@ -84,7 +84,6 @@ PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT", "us-east-1-aws")
 DATABASE_URL = os.getenv("DATABASE_URL")
 PORT = int(os.getenv("PORT", 8000))
 PORT = int(os.getenv("PORT", 8000))
-uvicorn.run("main:app", host="0.0.0.0", port=PORT)
 AUTH_TOKEN = os.getenv("AUTH_TOKEN")
 
 
