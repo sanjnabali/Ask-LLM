@@ -364,8 +364,7 @@ MIT License - See LICENSE file for details
 ## 📞 Support
 
 - **Issues**: GitHub Issues for bug reports
-- **Documentation**: API documentation at `/docs` endpoint
-- **Email**: support@document-analysis.com
+
 
 ---
 
