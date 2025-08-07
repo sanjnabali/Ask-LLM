@@ -1,0 +1,42 @@
+# Core Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.9  # upgraded from 0.0.6 to avoid Gradio conflict
+
+# Document Processing
+PyMuPDF==1.23.9
+python-docx==0.8.11
+beautifulsoup4==4.12.2
+requests==2.32.3  # upgraded to avoid datasets conflict
+aiohttp==3.9.0
+certifi==2023.11.17
+
+# Vector Database and Embeddings
+pinecone-client==3.0.0
+sentence-transformers==2.2.2
+numpy==1.26.4  # compatible with sentence-transformers and Python 3.12
+
+# Database
+psycopg2-binary==2.9.9
+asyncpg==0.29.0
+
+# LLM Integration
+google-generativeai==0.7.0  # upgraded to match langchain-google-genai requirement
+openai==1.43.0
+
+# Langchain ecosystem (optional, use if you rely on it in code)
+langchain-core==0.2.35
+langchain-google-genai==1.0.10
+langsmith==0.1.104
+
+# Data Processing
+pydantic==2.7.4  # upgraded for compatibility with langchain
+pydantic-settings==2.4.0
+
+# Utilities
+python-dotenv==1.0.0
+typing-extensions==4.12.0  # upgraded to match openai and altair requirements
+typing-inspection==0.4.1
+
+# Production extras for Render
+gunicorn==21.2.0
