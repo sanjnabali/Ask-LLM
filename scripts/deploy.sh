@@ -3,10 +3,8 @@
 export CARGO_HOME=/tmp/.cargo
 export CARGO_TARGET_DIR=/tmp/.cargo-target
 
-# Your existing build commands below
-apt-get update && \
-apt-get install -y build-essential libmupdf-dev libjpeg-dev zlib1g-dev libtesseract-dev && \
-pip install --upgrade pip setuptools wheel maturin && \
+# continue with build commands
+pip install --upgrade pip setuptools wheel maturin
 pip install -r requirements.txt
 
 set -e
