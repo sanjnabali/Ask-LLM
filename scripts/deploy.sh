@@ -90,7 +90,7 @@ uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 
 # Document Processing
-PyMuPDF==1.23.9
+PyMuPDF==1.23.7
 python-docx==0.8.11
 beautifulsoup4==4.12.2
 requests==2.31.0
