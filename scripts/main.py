@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, validator
 import uvicorn
 
 # Document processing
-import PyMuPDF  # fitz
+import fitz  # fitz
 from docx import Document
 from bs4 import BeautifulSoup
 import requests
@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 # Environment variables
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT", "gcp-starter")
+PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT", "us-east-1-aws")
 DATABASE_URL = os.getenv("DATABASE_URL")
 AUTH_TOKEN = "4ddf287faf3c89dfb4c0adc648a46975d4063a37899d2243a451f717af4a32cc"
 
@@ -146,7 +146,7 @@ class DocumentProcessor:
     def _extract_pdf_text(self, pdf_content: bytes) -> str:
         """Extract text from PDF bytes"""
         try:
-            doc = PyMuPDF.open(stream=pdf_content, filetype="pdf")
+            doc = fitz.open(stream=pdf_content, filetype="pdf")
             text = ""
             for page in doc:
                 text += page.get_text()
@@ -237,7 +237,7 @@ class VectorStore:
         try:
             if PINECONE_API_KEY:
                 self.pc = Pinecone(api_key=PINECONE_API_KEY)
-                self.index_name = "document-analysis"
+                self.index_name = "askllm"
                 
                 # Create index if it doesn't exist
                 existing_indexes = self.pc.list_indexes().names()
