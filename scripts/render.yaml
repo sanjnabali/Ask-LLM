@@ -1,9 +1,10 @@
 services:
   - type: web
-    name: ask-llm
+    name: document-analysis-api
     env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn scripts.main:app --host=0.0.0.0 --port=10000
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: python main.py
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
@@ -15,3 +16,6 @@ services:
         value: us-east-1-aws
       - key: INDEX_NAME
         value: askllm
+      - key: PORT
+        value: 10000
+    healthCheckPath: /health

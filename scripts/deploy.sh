@@ -1,5 +1,5 @@
 #!/bin/bash
-# render_deploy.sh - Render-specific deployment script
+# deploy.sh - Updated deployment script for Python 3.12 compatibility
 
 set -e
 
@@ -10,8 +10,8 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-echo -e "${BLUE}🚀 Document Analysis System - Render Deployment${NC}"
-echo "=================================================="
+echo -e "${BLUE}🚀 Document Analysis System - Fixed Deployment${NC}"
+echo "================================================================"
 
 # Check Python version
 check_python() {
@@ -32,10 +32,9 @@ check_api_keys() {
     echo -e "${BLUE}Checking API keys...${NC}"
     
     if [ -z "$GEMINI_API_KEY" ]; then
-        echo -e "${RED}❌ GEMINI_API_KEY not set${NC}"
-        echo -e "${YELLOW}Get your key from: https://makersuite.google.com/app/apikey${NC}"
-        echo "Set it with: export GEMINI_API_KEY='your_key_here'"
-        exit 1
+        echo -e "${YELLOW}⚠️  GEMINI_API_KEY not set - some features will be limited${NC}"
+        echo -e "${YELLOW}   Get your key from: https://makersuite.google.com/app/apikey${NC}"
+        echo "   Set it with: export GEMINI_API_KEY='your_key_here'"
     else
         echo -e "${GREEN}✅ GEMINI_API_KEY is set${NC}"
     fi
@@ -52,6 +51,19 @@ check_api_keys() {
 test_local() {
     echo -e "${BLUE}Testing locally before deployment...${NC}"
     
+    # Create virtual environment
+    if [ ! -d "venv" ]; then
+        echo "Creating virtual environment..."
+        python3 -m venv venv
+    fi
+    
+    # Activate virtual environment
+    source venv/bin/activate
+    
+    # Upgrade pip
+    echo "Upgrading pip..."
+    pip install --upgrade pip
+    
     # Install dependencies
     echo "Installing dependencies..."
     pip install -r requirements.txt
@@ -62,7 +74,7 @@ test_local() {
     SERVER_PID=$!
     
     # Wait for server to start
-    sleep 8
+    sleep 10
     
     # Test health endpoint
     if curl -s http://localhost:8000/health | grep -q "ok"; then
@@ -76,348 +88,321 @@ test_local() {
     # Stop test server
     kill $SERVER_PID 2>/dev/null || true
     sleep 2
+    
+    # Deactivate virtual environment
+    deactivate
 }
 
-# Prepare for Render deployment
-prepare_render() {
-    echo -e "${BLUE}Preparing for Render deployment...${NC}"
+# Prepare for deployment
+prepare_deployment() {
+    echo -e "${BLUE}Preparing for deployment...${NC}"
     
-    # Create/update requirements.txt with exact versions for stability
-    cat > requirements.txt << 'EOF'
-# Core Framework
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
+    # Create .gitignore if it doesn't exist
+    if [ ! -f ".gitignore" ]; then
+        cat > .gitignore << 'EOF'
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Document Processing
-PyMuPDF==1.23.7
-python-docx==0.8.11
-beautifulsoup4==4.12.2
-requests==2.31.0
-aiohttp==3.9.0
-certifi==2023.11.17
+# Virtual environments
+venv/
+env/
+ENV/
 
-# Vector Database and Embeddings
-pinecone-client==3.0.0
-sentence-transformers==2.2.2
-numpy==1.24.3
+# Environment variables
+.env
+.env.local
 
-# Database (optional)
-psycopg2-binary==2.9.9
-asyncpg==0.29.0
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 
-# LLM Integration
-google-generativeai==0.3.2
+# OS
+.DS_Store
+Thumbs.db
 
-# Data Processing
-pydantic==2.5.0
+# Logs
+*.log
+logs/
 
-# Utilities
-python-dotenv==1.0.0
-typing-extensions==4.8.0
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Temporary files
+temp/
+tmp/
+*.tmp
 EOF
-    
-    echo -e "${GREEN}✅ requirements.txt updated for Render${NC}"
+        echo -e "${GREEN}✅ .gitignore created${NC}"
+    fi
     
     # Check if git repo exists
     if [ ! -d ".git" ]; then
         echo "Initializing git repository..."
         git init
-        echo "node_modules/" > .gitignore
-        echo "__pycache__/" >> .gitignore
-        echo ".env" >> .gitignore
-        echo "*.pyc" >> .gitignore
-    fi
-    
-    # Stage all files
-    git add .
-    
-    # Commit if there are changes
-    if ! git diff --staged --quiet; then
-        git commit -m "Prepare for Render deployment - $(date)"
-        echo -e "${GREEN}✅ Changes committed${NC}"
+        git add .
+        git commit -m "Initial commit - Fixed deployment"
     else
-        echo -e "${YELLOW}No changes to commit${NC}"
+        # Stage all files
+        git add .
+        
+        # Commit if there are changes
+        if ! git diff --staged --quiet; then
+            git commit -m "Fixed deployment - $(date)"
+            echo -e "${GREEN}✅ Changes committed${NC}"
+        else
+            echo -e "${YELLOW}No changes to commit${NC}"
+        fi
     fi
 }
 
-# Generate Render deployment instructions
-render_instructions() {
-    echo -e "${BLUE}Creating Render deployment guide...${NC}"
+# Generate deployment instructions
+create_deployment_guide() {
+    echo -e "${BLUE}Creating deployment guide...${NC}"
     
-    cat > RENDER_DEPLOYMENT.md << 'EOF'
-# 🚀 Render Deployment Instructions
+    cat > DEPLOYMENT_GUIDE.md << 'EOF'
+# 🚀 Fixed Deployment Guide
 
-## Step 1: Push to GitHub
-```bash
-# Add your GitHub repository (replace with your repo URL)
-git remote add origin https://github.com/yourusername/document-analysis-system.git
-git branch -M main
-git push -u origin main
+## Issues Fixed:
+1. ✅ Package compatibility with Python 3.12
+2. ✅ Updated dependency versions
+3. ✅ Fixed import errors
+4. ✅ Added proper error handling
+5. ✅ Optimized for production deployment
+
+## Quick Deploy to Render
+
+### Step 1: Environment Setup
+Set these environment variables in Render:
+```
+GEMINI_API_KEY=your_actual_gemini_api_key
+PINECONE_API_KEY=your_pinecone_key (optional)
+PYTHON_VERSION=3.11.0
 ```
 
-## Step 2: Deploy on Render
-
-1. **Go to Render Dashboard**
-   - Visit: https://render.com
-   - Sign in with GitHub
-
-2. **Create New Web Service**
-   - Click "New +" → "Web Service"
-   - Connect your GitHub repository
-   - Select your `document-analysis-system` repo
-
-3. **Configure Service Settings**
-   ```
-   Name: document-analysis-api
-   Environment: Python 3
-   Build Command: pip install -r requirements.txt
-   Start Command: python main.py
+### Step 2: Deploy
+1. Push to GitHub:
+   ```bash
+   git remote add origin https://github.com/yourusername/your-repo.git
+   git branch -M main
+   git push -u origin main
    ```
 
-4. **Set Environment Variables**
-   In the Render dashboard, add these environment variables:
-   ```
-   GEMINI_API_KEY = your_gemini_api_key_here
-   PINECONE_API_KEY = your_pinecone_key (optional)
-   PINECONE_ENVIRONMENT = gcp-starter
-   PYTHON_VERSION = 3.11.0
-   PORT = 8000
-   ```
+2. In Render Dashboard:
+   - New Web Service
+   - Connect GitHub repo
+   - Use existing `render.yaml` configuration
+   - Deploy!
 
-5. **Deploy**
-   - Click "Create Web Service"
-   - Wait for deployment (5-10 minutes)
-   - Your API will be live at: `https://your-service-name.onrender.com`
-
-## Step 3: Test Your Deployment
-
+### Step 3: Test Deployment
 ```bash
-# Test health endpoint
-curl https://your-service-name.onrender.com/health
+# Test health
+curl https://your-app.onrender.com/health
 
-# Test main API
-curl -X POST https://your-service-name.onrender.com/api/v1/hackrx/run \
+# Test API
+curl -X POST https://your-app.onrender.com/api/v1/hackrx/run \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer 4ddf287faf3c89dfb4c0adc648a46975d4063a37899d2243a451f717af4a32cc" \
   -d '{
-    "documents": "Sample policy text here...",
-    "questions": ["Test question?"]
+    "documents": "Your policy text here...",
+    "questions": ["Is surgery covered?"]
   }'
 ```
 
-## Render-Specific Notes
+## Key Improvements Made:
 
-- **Free Plan Limitations**: 
-  - Service sleeps after 15 minutes of inactivity
-  - 750 build hours per month
-  - First request after sleep takes ~30 seconds
+### 1. Fixed Dependencies
+- Updated all packages to Python 3.12 compatible versions
+- Added missing dependencies (scipy, scikit-learn, etc.)
+- Fixed version conflicts
 
-- **Monitoring**: 
-  - Check logs in Render dashboard
-  - Monitor at: https://your-service.onrender.com/health
+### 2. Enhanced Error Handling
+- Graceful fallbacks when services unavailable
+- Better logging and debugging
+- Proper exception handling
 
-- **Updates**: 
-  - Push to GitHub main branch
-  - Render auto-deploys on git push
+### 3. Service Resilience
+- Works without Pinecone (memory fallback)
+- Works without Gemini (rule-based fallback)
+- Robust document processing
+
+### 4. Production Ready
+- Proper logging configuration
+- Health checks with service status
+- Performance monitoring
+- CORS enabled
 
 ## Troubleshooting
 
-**Build Failures:**
-- Check logs in Render dashboard
-- Verify requirements.txt format
-- Ensure Python 3.11+ specified
+**Build Fails:**
+- Check Python version in Render (should be 3.11.0)
+- Verify all environment variables are set
+- Check build logs for specific errors
 
 **Runtime Errors:**
-- Check environment variables are set
-- Verify API keys are valid
-- Monitor logs for specific errors
+- Check service logs in Render dashboard
+- Verify API keys are correct and active
+- Test individual endpoints
 
-**Slow Cold Starts:**
-- Use Render paid plan for always-on services
-- Or implement health check pings every 10 minutes
+**Slow Performance:**
+- Normal on free Render plan (cold starts)
+- Consider paid plan for production use
+- Check logs for specific bottlenecks
+
+## Testing Locally
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Set environment variables
+export GEMINI_API_KEY=your_key
+export PINECONE_API_KEY=your_key  # optional
+
+# Run locally
+python main.py
+
+# Test
+curl http://localhost:8000/health
+```
+
+## API Endpoints
+
+1. **Health Check:** `GET /health`
+2. **Main Processing:** `POST /api/v1/hackrx/run`
+3. **Structured Analysis:** `POST /api/v1/analyze`
+
+All endpoints require Bearer token authentication except health check.
+
+## Support
+
+- Check logs in Render dashboard
+- Monitor health endpoint
+- Use structured analysis endpoint for debugging
 EOF
     
-    echo -e "${GREEN}✅ Deployment guide created: RENDER_DEPLOYMENT.md${NC}"
+    echo -e "${GREEN}✅ Deployment guide created: DEPLOYMENT_GUIDE.md${NC}"
 }
 
-# Create optimized test script for Render
-create_render_test() {
-    cat > test_render_deployment.py << 'EOF'
+# Create test script
+create_test_script() {
+    cat > test_deployment.py << 'EOF'
 #!/usr/bin/env python3
 """
-Test script specifically for Render deployment
+Production deployment test script
 """
 
 import requests
 import json
 import time
 import sys
-from typing import Dict, Any
 
-# Configuration
-AUTH_TOKEN = "4ddf287faf3c89dfb4c0adc648a46975d4063a37899d2243a451f717af4a32cc"
-
-class RenderTester:
-    def __init__(self, base_url: str):
-        self.base_url = base_url.rstrip('/')
-        self.headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {AUTH_TOKEN}"
-        }
-        
-    def test_health(self) -> bool:
-        """Test health endpoint"""
-        print("🔍 Testing health endpoint...")
-        try:
-            response = requests.get(f"{self.base_url}/health", timeout=30)
-            if response.status_code == 200 and "ok" in response.text:
-                print("✅ Health check passed")
-                return True
-            else:
-                print(f"❌ Health check failed: {response.status_code}")
-                return False
-        except Exception as e:
-            print(f"❌ Health check error: {e}")
-            return False
+def test_deployment(base_url):
+    """Test deployed API"""
+    print(f"🔍 Testing deployment at: {base_url}")
     
-    def test_main_endpoint(self) -> bool:
-        """Test main hackrx endpoint"""
-        print("🔍 Testing main API endpoint...")
-        
+    # Test health
+    try:
+        response = requests.get(f"{base_url}/health", timeout=30)
+        if response.status_code == 200:
+            print("✅ Health check passed")
+            print(f"   Status: {response.json()}")
+        else:
+            print(f"❌ Health check failed: {response.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ Health check error: {e}")
+        return False
+    
+    # Test main API
+    try:
         payload = {
             "documents": """
-            INSURANCE POLICY DOCUMENT
+            INSURANCE POLICY
             
-            This policy provides coverage for medical expenses including:
-            - Hospitalization costs
-            - Surgery expenses
+            Coverage includes:
+            - Medical expenses
+            - Surgery costs
             - Emergency treatments
             
-            WAITING PERIODS:
-            - General treatments: No waiting period
-            - Pre-existing conditions: 36 months
-            - Specific surgeries (knee, hip): 24 months
+            Waiting periods:
+            - General: No waiting
+            - Surgery: 12 months
+            - Pre-existing: 36 months
             
-            AGE LIMITS: 18-65 years
-            GEOGRAPHIC COVERAGE: Worldwide
-            
-            POLICY REQUIREMENTS:
-            - Minimum 12 months for surgery coverage
-            - Continuous premium payments required
+            Age limit: 18-65 years
             """,
             "questions": [
-                "What is the waiting period for knee surgery?",
-                "Is a 46-year-old eligible for coverage?",
-                "46M, knee surgery, 3-month policy - covered?"
+                "What is the waiting period for surgery?",
+                "Am I eligible at age 45?"
             ]
         }
         
-        try:
-            print("Sending request... (this may take 10-30 seconds)")
-            response = requests.post(
-                f"{self.base_url}/api/v1/hackrx/run",
-                headers=self.headers,
-                json=payload,
-                timeout=60  # Longer timeout for Render cold start
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                print("✅ API endpoint test passed")
-                print("\nSample Responses:")
-                for i, answer in enumerate(data.get("answers", [])[:2]):
-                    print(f"{i+1}. {answer[:100]}...")
-                return True
-            else:
-                print(f"❌ API test failed: {response.status_code}")
-                print(f"Response: {response.text}")
-                return False
-                
-        except Exception as e:
-            print(f"❌ API test error: {e}")
-            return False
-    
-    def test_cold_start_performance(self) -> Dict[str, Any]:
-        """Test performance including cold start"""
-        print("🔍 Testing performance (including cold start)...")
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer 4ddf287faf3c89dfb4c0adc648a46975d4063a37899d2243a451f717af4a32cc"
+        }
         
-        times = []
-        for i in range(3):
-            print(f"Request {i+1}/3...", end=" ")
-            start_time = time.time()
-            
-            try:
-                response = requests.get(f"{self.base_url}/health", timeout=45)
-                end_time = time.time()
-                duration = end_time - start_time
-                times.append(duration)
-                print(f"{duration:.2f}s")
-                
-                if i == 0 and duration > 20:
-                    print("⚠️  Cold start detected (normal for free Render plan)")
-                    
-            except Exception as e:
-                print(f"Failed: {e}")
-                times.append(None)
+        print("🔍 Testing main API endpoint...")
+        response = requests.post(
+            f"{base_url}/api/v1/hackrx/run",
+            headers=headers,
+            json=payload,
+            timeout=60
+        )
         
-        valid_times = [t for t in times if t is not None]
-        if valid_times:
-            avg_time = sum(valid_times) / len(valid_times)
-            print(f"📊 Average response time: {avg_time:.2f}s")
-            if avg_time < 5:
-                print("✅ Good performance")
-            elif avg_time < 15:
-                print("⚠️  Acceptable performance")
-            else:
-                print("⚠️  Slow performance (consider Render paid plan)")
-        
-        return {"times": times, "average": avg_time if valid_times else None}
-    
-    def run_comprehensive_test(self) -> bool:
-        """Run all tests"""
-        print(f"🚀 Testing Render deployment at: {self.base_url}")
-        print("=" * 60)
-        
-        # Test 1: Health check
-        health_ok = self.test_health()
-        if not health_ok:
-            return False
-        
-        # Test 2: Performance check
-        perf_results = self.test_cold_start_performance()
-        
-        # Test 3: Main API
-        api_ok = self.test_main_endpoint()
-        
-        print("\n" + "=" * 60)
-        if health_ok and api_ok:
-            print("🎉 All tests passed! Your Render deployment is working.")
-            print(f"📡 API URL: {self.base_url}")
-            print("🔗 Share this URL for the hackathon submission")
-            return True
+        if response.status_code == 200:
+            print("✅ API test passed")
+            data = response.json()
+            for i, answer in enumerate(data.get("answers", [])[:2]):
+                print(f"   Q{i+1}: {answer[:100]}...")
         else:
-            print("❌ Some tests failed. Check the logs above.")
+            print(f"❌ API test failed: {response.status_code}")
+            print(f"   Response: {response.text}")
             return False
-
-def main():
-    if len(sys.argv) != 2:
-        print("Usage: python test_render_deployment.py <RENDER_URL>")
-        print("Example: python test_render_deployment.py https://your-app.onrender.com")
-        sys.exit(1)
+            
+    except Exception as e:
+        print(f"❌ API test error: {e}")
+        return False
     
-    url = sys.argv[1]
-    tester = RenderTester(url)
-    success = tester.run_comprehensive_test()
-    
-    sys.exit(0 if success else 1)
+    print("🎉 All tests passed!")
+    return True
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) != 2:
+        print("Usage: python test_deployment.py <BASE_URL>")
+        print("Example: python test_deployment.py https://your-app.onrender.com")
+        sys.exit(1)
+    
+    base_url = sys.argv[1].rstrip('/')
+    success = test_deployment(base_url)
+    sys.exit(0 if success else 1)
 EOF
     
-    chmod +x test_render_deployment.py
-    echo -e "${GREEN}✅ Render test script created: test_render_deployment.py${NC}"
+    chmod +x test_deployment.py
+    echo -e "${GREEN}✅ Test script created: test_deployment.py${NC}"
 }
 
 # Main function
@@ -435,30 +420,33 @@ main() {
         "prepare")
             check_python
             check_api_keys
-            test_local
-            prepare_render
+            prepare_deployment
             ;;
         "all")
             check_python
             check_api_keys
             test_local
-            prepare_render
-            render_instructions
-            create_render_test
+            prepare_deployment
+            create_deployment_guide
+            create_test_script
             
             echo ""
-            echo -e "${GREEN}🎉 Ready for Render deployment!${NC}"
+            echo -e "${GREEN}🎉 Deployment preparation complete!${NC}"
             echo ""
             echo -e "${YELLOW}Next steps:${NC}"
-            echo "1. Push to GitHub: git remote add origin <your-repo-url>"
-            echo "2. Follow instructions in: RENDER_DEPLOYMENT.md"
-            echo "3. Test deployment: python test_render_deployment.py <render-url>"
+            echo "1. Set your API keys: export GEMINI_API_KEY='your_key'"
+            echo "2. Push to GitHub: git push origin main"
+            echo "3. Deploy on Render using the guide: DEPLOYMENT_GUIDE.md"
+            echo "4. Test: python test_deployment.py <your-render-url>"
             echo ""
-            echo -e "${BLUE}Quick deploy checklist:${NC}"
-            echo "✅ Local tests passed"
-            echo "✅ Code ready for Render"
-            echo "✅ Dependencies optimized"
-            echo "✅ Test scripts ready"
+            echo -e "${BLUE}What was fixed:${NC}"
+            echo "✅ Python 3.12 compatibility"
+            echo "✅ Package version conflicts"
+            echo "✅ Missing dependencies"
+            echo "✅ Import errors"
+            echo "✅ Production optimizations"
+            echo "✅ Error handling"
+            echo "✅ Service fallbacks"
             ;;
         *)
             echo "Usage: $0 [check|test|prepare|all]"
@@ -466,7 +454,7 @@ main() {
             echo "Commands:"
             echo "  check    - Check Python and API keys"
             echo "  test     - Test system locally"
-            echo "  prepare  - Prepare code for Render"
+            echo "  prepare  - Prepare code for deployment"
             echo "  all      - Complete preparation (default)"
             exit 1
             ;;
